@@ -1,0 +1,43 @@
+{
+  "name": "simone-bianco/laravel-key-rotator",
+  "version": "2.0.0",
+  "description": "Laravel package that allows to rotate keys in your application, optionally tracking usage for each key",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {"name": "Simone Bianco"}
+  ],
+  "require": {
+      "php": ">=8.3",
+      "illuminate/support": "^12.0",
+      "illuminate/validation": "^12.0",
+      "illuminate/console": "^12.0",
+      "illuminate/cache": "^12.0",
+      "spatie/laravel-package-tools": "^1.92"
+  },
+  "require-dev": {
+      "phpunit/phpunit": "^12.3",
+      "orchestra/testbench": "^10.6",
+      "pestphp/pest": "^3.8",
+      "pestphp/pest-plugin-laravel": "^3.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "SimoneBianco\\LaravelKeyRotator\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "SimoneBianco\\LaravelKeyRotator\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "SimoneBianco\\LaravelKeyRotator\\LaravelKeyRotatorServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
