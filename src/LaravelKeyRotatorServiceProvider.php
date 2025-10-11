@@ -18,9 +18,11 @@ class LaravelKeyRotatorServiceProvider extends PackageServiceProvider
     public function configurePackage(Package $package): void
     {
         $package
-            ->name('laravel-key-rotator')
-            ->hasConfigFile('laravel-key-rotator')
-            ->hasMigration('create_rotable_api_keys_table')
+            ->name('key-rotator')
+            ->hasConfigFile('key-rotator')
+            ->hasMigrations([
+                'create_rotable_api_keys_table',
+            ])
             ->hasCommands([
                 MakeKeyRotatorCommand::class,
                 ResetUsageCommand::class,
