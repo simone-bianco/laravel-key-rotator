@@ -1,0 +1,35 @@
+/* Custom prose styling for better readability in WYSIWYG editors */
+:deep(.prose) {
+    line-height: 1.7;
+}
+
+:deep(.prose h1),
+:deep(.prose h2),
+:deep(.prose h3),
+:deep(.prose h4),
+:deep(.prose h5),
+:deep(.prose h6) {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+
+:deep(.prose p) {
+    margin-bottom: 1em;
+}
+
+:deep(.prose ul),
+:deep(.prose ol) {
+    margin-bottom: 1em;
+}
+
+:deep(.prose blockquote) {
+    border-left: 4px solid rgb(var(--primary-500));
+    padding-left: 1rem;
+    margin: 1.5em 0;
+    background: rgb(var(--surface-50));
+}
+
+.dark :deep(.prose blockquote) {
+    background: rgb(var(--surface-800));
+}
+

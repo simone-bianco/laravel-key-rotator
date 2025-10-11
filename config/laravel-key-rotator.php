@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'model' => \SimoneBianco\LaravelKeyRotator\Models\RotableKey::class,
+    'model' => \YourPackage\Models\RotableApiKey::class,
 
-    'encrypt_keys' => false,
+    'encrypt_keys' => true,
 
     'db_connection' => env('DB_CONNECTION', 'mysql'),
 
