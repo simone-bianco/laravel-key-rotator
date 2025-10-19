@@ -35,10 +35,10 @@ class RotableApiKey extends Model
         'free_usage_resets_at' => 'datetime',
         'last_free_usage_reset_at' => 'datetime',
         'last_used_at' => 'datetime',
-        'max_base_usage' => 'decimal:8',
-        'current_base_usage' => 'decimal:8',
-        'max_free_usage' => 'decimal:8',
-        'current_free_usage' => 'decimal:8',
+        'max_base_usage' => 'float',
+        'current_base_usage' => 'float',
+        'max_free_usage' => 'float',
+        'current_free_usage' => 'float',
     ];
 
     public function getConnection()
