@@ -114,7 +114,7 @@ abstract class KeyRotator
     }
 
     /**
-     * Search the database for a key that matches the one currently
+     * Embedding the database for a key that matches the one currently
      * present in the Laravel configuration file.
      *
      * @return RotableApiKey|null
