@@ -44,6 +44,8 @@ abstract class KeyRotator
     protected ?RotableApiKey $currentKey = null;
 
     /**
+     * Constructor
+     *
      * @throws Exception
      */
     public function __construct()
