@@ -69,8 +69,7 @@ class OpenAIKeyRotator extends KeyRotator
 Register your API keys in the database:
 
 ```php
-use App\KeyRotators\OpenAIKeyRotator;
-use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
+use App\KeyRotators\Openai\OpenAIKeyRotator;use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
 
 $rotator = new OpenAIKeyRotator();
 
@@ -100,7 +99,7 @@ $rotator->registerKey(new RotableKeyData(
 ### 3. Use the Rotator
 
 ```php
-use App\KeyRotators\OpenAIKeyRotator;
+use App\KeyRotators\Openai\OpenAIKeyRotator;
 
 // Pick and inject the best available key
 OpenAIKeyRotator::make()
@@ -251,7 +250,7 @@ class OpenAIKeyRotator extends KeyRotator
 ### Handling Depletion with Automatic Retry
 
 ```php
-use App\KeyRotators\OpenAIKeyRotator;
+use App\KeyRotators\Openai\OpenAIKeyRotator;
 
 $maxRetries = 3;
 $attempt = 0;
