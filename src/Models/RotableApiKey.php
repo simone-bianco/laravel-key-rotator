@@ -43,7 +43,7 @@ class RotableApiKey extends Model
 
     public function getConnection()
     {
-        return config('laravel-key-rotator.database_connection', parent::getConnection());
+        return config('laravel-key-rotator.database_connection') ?? parent::getConnection();
     }
 
     public function setKeyAttribute(string $value): void
