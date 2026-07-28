@@ -32,6 +32,9 @@ class TestCase extends Orchestra
             'prefix'   => '',
         ]);
 
+        $app['config']->set('app.key', 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+        $app['config']->set('app.cipher', 'AES-256-CBC');
+
         // Set up the key rotator config
         $app['config']->set('laravel-key-rotator.encrypt_keys', false);
     }

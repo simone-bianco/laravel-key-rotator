@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace SimoneBianco\LaravelKeyRotator\Models;
 
-use Exception;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
+use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
+use Throwable;
 
 class RotableApiKey extends Model
 {
@@ -57,14 +60,14 @@ class RotableApiKey extends Model
 
     public function getKeyAttribute(string $value): string
     {
-        if (!config('laravel-key-rotator.encrypt_keys', true)) {
+        if (! config('laravel-key-rotator.encrypt_keys', true)) {
             return $value;
         }
 
         try {
             return Crypt::decryptString($value);
-        } catch (Exception $e) {
-            return "Error decrypting key: $value";
+        } catch (Throwable) {
+            throw new KeyDecryptionException('Unable to decrypt the stored API key.');
         }
     }
 }

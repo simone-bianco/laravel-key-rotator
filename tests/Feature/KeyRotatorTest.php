@@ -4,6 +4,8 @@ use SimoneBianco\LaravelKeyRotator\Models\RotableApiKey;
 use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
 use SimoneBianco\LaravelKeyRotator\Exceptions\NoAvailableKeysException;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
 
 // Test KeyRotator implementation
 class TestKeyRotator extends \SimoneBianco\LaravelKeyRotator\KeyRotator
@@ -261,4 +263,32 @@ test('throws exception when injecting without picking a key', function () {
 
     $rotator->injectKey();
 })->throws(Exception::class, 'No key selected');
+
+test('decryption failure is fail closed without ciphertext leakage or config mutation', function () {
+    Config::set('laravel-key-rotator.encrypt_keys', true);
+    Config::set('services.test.api_key', 'unchanged');
+
+    $key = RotableApiKey::query()->create([
+        'service' => 'test-service',
+        'key' => 'valid-key',
+        'base_limit_type' => 'unlimited',
+        'free_limit_type' => 'none',
+        'is_active' => true,
+        'is_depleted' => false,
+    ]);
+
+    DB::table('rotable_api_keys')
+        ->where('id', $key->id)
+        ->update(['key' => 'invalid-ciphertext']);
+
+    $key->refresh();
+    $rotator = new TestKeyRotator();
+    $rotator->setKey($key);
+
+    expect(fn () => $rotator->injectKey())
+        ->toThrow(KeyDecryptionException::class, 'Unable to decrypt the stored API key.');
+
+    expect(Config::get('services.test.api_key'))
+        ->toBe('unchanged');
+});
 

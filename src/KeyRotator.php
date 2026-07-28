@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
 use SimoneBianco\LaravelKeyRotator\Enums\BaseLimitType;
 use SimoneBianco\LaravelKeyRotator\Enums\FreeLimitType;
+use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
 use SimoneBianco\LaravelKeyRotator\Exceptions\NoAvailableKeysException;
 use SimoneBianco\LaravelKeyRotator\Models\RotableApiKey;
 
@@ -344,6 +345,7 @@ abstract class KeyRotator
      *
      * @return $this The rotator instance for method chaining.
      * @throws Exception If no key has been selected via pickKey() or setKey().
+     * @throws KeyDecryptionException If the stored key cannot be decrypted.
      *
      * @example
      * ```php
@@ -383,10 +385,11 @@ abstract class KeyRotator
         }
 
         // Support both string and array of config keys
+        $decryptedKey = $this->currentKey->key;
         $configKeys = is_array(static::$configKey) ? static::$configKey : [static::$configKey];
 
         foreach ($configKeys as $configKey) {
-            Config::set($configKey, $this->currentKey->key);
+            Config::set($configKey, $decryptedKey);
         }
 
         return $this;

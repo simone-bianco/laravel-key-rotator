@@ -1,6 +1,5 @@
 {
   "name": "simone-bianco/laravel-key-rotator",
-  "version": "2.0.0",
   "description": "Laravel package that allows to rotate keys in your application, optionally tracking usage for each key",
   "type": "library",
   "license": "MIT",
