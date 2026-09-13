@@ -5,16 +5,12 @@ namespace SimoneBianco\LaravelKeyRotator;
 use SimoneBianco\LaravelKeyRotator\Console\Commands\MakeKeyRotatorCommand;
 use SimoneBianco\LaravelKeyRotator\Console\Commands\ResetFreeUsageCommand;
 use SimoneBianco\LaravelKeyRotator\Console\Commands\ResetUsageCommand;
+use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Spatie\LaravelPackageTools\Commands\InstallCommand;
 
 class LaravelKeyRotatorServiceProvider extends PackageServiceProvider
 {
-    /**
-     * @param Package $package
-     * @return void
-     */
     public function configurePackage(Package $package): void
     {
         $package
@@ -22,13 +18,14 @@ class LaravelKeyRotatorServiceProvider extends PackageServiceProvider
             ->hasConfigFile('key-rotator')
             ->hasMigrations([
                 'create_rotable_api_keys_table',
+                'add_soft_deletes_to_rotable_api_keys_table',
             ])
             ->hasCommands([
                 MakeKeyRotatorCommand::class,
                 ResetUsageCommand::class,
                 ResetFreeUsageCommand::class,
             ])
-            ->hasInstallCommand(function(InstallCommand $command) {
+            ->hasInstallCommand(function (InstallCommand $command) {
                 $command
                     ->publishConfigFile()
                     ->publishMigrations()
@@ -37,10 +34,5 @@ class LaravelKeyRotatorServiceProvider extends PackageServiceProvider
             });
     }
 
-    /**
-     * @return void
-     */
-    public function packageRegistered(): void
-    {
-    }
+    public function packageRegistered(): void {}
 }

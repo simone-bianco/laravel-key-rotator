@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace SimoneBianco\LaravelKeyRotator\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Crypt;
 use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
 use Throwable;
 
 class RotableApiKey extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'service',
         'key',

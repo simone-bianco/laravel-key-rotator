@@ -24,22 +24,25 @@ abstract class KeyRotator
 {
     /**
      * The service name as stored in the database (e.g., 'openai').
-     * @var string
      */
     protected static string $serviceName;
 
     /**
      * The Laravel configuration key(s) to override (e.g., 'services.openai.api_key').
      * Can be a single string or an array of keys to override with the same value.
-     * @var string|array
      */
     protected static string|array $configKey;
 
     protected static string $baseLimitType = BaseLimitType::UNLIMITED->value; // 'fixed', 'unlimited', 'none'
+
     protected static string $freeLimitType = FreeLimitType::NONE->value;
+
     protected static float $maxBaseUsage = 0;
+
     protected static float $maxFreeUsage = 0;
+
     protected static ?Carbon $freeUsageResetsAt = null;
+
     protected static string $resetTimezone = 'UTC';
 
     protected ?RotableApiKey $currentKey = null;
@@ -51,12 +54,12 @@ abstract class KeyRotator
      */
     public function __construct()
     {
-        if (!static::$configKey) {
-            throw new Exception("KeyRotator: Property 'configKey' must be defined in " . static::class);
+        if (! static::$configKey) {
+            throw new Exception("KeyRotator: Property 'configKey' must be defined in ".static::class);
         }
 
-        if (!static::$serviceName) {
-            throw new Exception("KeyRotator: Property 'serviceName' must be defined in " . static::class);
+        if (! static::$serviceName) {
+            throw new Exception("KeyRotator: Property 'serviceName' must be defined in ".static::class);
         }
     }
 
@@ -76,7 +79,7 @@ abstract class KeyRotator
      * This method creates a new rotable API key with the provided data or default values.
      * You can override this method to add custom validation or processing logic.
      *
-     * @param RotableKeyData|null $data The key data to register. If null, uses default values.
+     * @param  RotableKeyData|null  $data  The key data to register. If null, uses default values.
      * @return RotableApiKey The created API key model instance.
      *
      * @example
@@ -103,7 +106,7 @@ abstract class KeyRotator
      */
     public function registerKey(?RotableKeyData $data = null): RotableApiKey
     {
-        $data ??= new RotableKeyData();
+        $data ??= new RotableKeyData;
 
         $data->service = static::$serviceName;
         $data->base_limit_type ??= static::$baseLimitType;
@@ -119,8 +122,6 @@ abstract class KeyRotator
     /**
      * Embedding the database for a key that matches the one currently
      * present in the Laravel configuration file.
-     *
-     * @return RotableApiKey|null
      */
     protected static function getActiveKeyFromConfig(): ?RotableApiKey
     {
@@ -128,7 +129,7 @@ abstract class KeyRotator
         $configKeyToCheck = is_array(static::$configKey) ? static::$configKey[0] : static::$configKey;
         $configKeyValue = Config::get($configKeyToCheck);
 
-        if (!$configKeyValue) {
+        if (! $configKeyValue) {
             return null;
         }
 
@@ -168,7 +169,7 @@ abstract class KeyRotator
      */
     public static function make(): static
     {
-        return new static();
+        return new static;
     }
 
     /**
@@ -177,8 +178,7 @@ abstract class KeyRotator
      * This method manually sets the active key. Typically used when you want to
      * work with a specific key instead of letting the rotator pick one automatically.
      *
-     * @param RotableApiKey $key The API key to set as current.
-     * @return void
+     * @param  RotableApiKey  $key  The API key to set as current.
      *
      * @example
      * ```php
@@ -214,6 +214,7 @@ abstract class KeyRotator
     protected static function getCachedRotableKeyId(): ?int
     {
         $service = static::$serviceName;
+
         return Context::getHidden("rotable_api_key_id_$service");
     }
 
@@ -221,8 +222,9 @@ abstract class KeyRotator
     {
         $keyId = self::getCachedRotableKeyId();
         if ($keyId) {
-            return RotableApiKey::find($keyId);
+            return RotableApiKey::withTrashed()->find($keyId);
         }
+
         return null;
     }
 
@@ -233,8 +235,8 @@ abstract class KeyRotator
      * registers usage for it. Useful when you need to track usage after an API call
      * without maintaining a reference to the rotator instance.
      *
-     * @param float $usage The amount of usage to register (e.g., tokens consumed, API calls made).
-     * @return void
+     * @param  float  $usage  The amount of usage to register (e.g., tokens consumed, API calls made).
+     *
      * @throws Exception If no cached key ID is found or the key doesn't exist.
      *
      * @example
@@ -261,16 +263,16 @@ abstract class KeyRotator
     {
         $service = static::$serviceName;
         $keyId = self::getCachedRotableKeyId();
-        if (!$keyId) {
+        if (! $keyId) {
             throw new Exception("KeyRotator: No cached RotableApiKey ID found for service '$service' when trying to register usage.");
         }
 
-        $key = RotableApiKey::find($keyId);
-        if (!$key) {
+        $key = RotableApiKey::withTrashed()->find($keyId);
+        if (! $key) {
             throw new Exception("KeyRotator: No RotableApiKey found with ID $keyId for service '$service' when trying to register usage.");
         }
 
-        $rotator = new static();
+        $rotator = new static;
         $rotator->setKey($key);
         $rotator->registerUsage($usage);
     }
@@ -283,6 +285,7 @@ abstract class KeyRotator
      * You can override this method to implement custom key selection logic.
      *
      * @return $this The rotator instance for method chaining.
+     *
      * @throws NoAvailableKeysException If no available keys are found.
      *
      * @example
@@ -325,7 +328,7 @@ abstract class KeyRotator
             ->first();
 
         $serviceName = static::$serviceName;
-        if (!$nextKey) {
+        if (! $nextKey) {
             throw new NoAvailableKeysException("No available API keys for service '$serviceName'.");
         }
 
@@ -344,6 +347,7 @@ abstract class KeyRotator
      * You can override this method to inject additional configuration values.
      *
      * @return $this The rotator instance for method chaining.
+     *
      * @throws Exception If no key has been selected via pickKey() or setKey().
      * @throws KeyDecryptionException If the stored key cannot be decrypted.
      *
@@ -380,8 +384,8 @@ abstract class KeyRotator
      */
     public function injectKey(): static
     {
-        if (!$this->currentKey) {
-            throw new Exception("KeyRotator: No key selected. Call pickKey() before injectKey().");
+        if (! $this->currentKey) {
+            throw new Exception('KeyRotator: No key selected. Call pickKey() before injectKey().');
         }
 
         // Support both string and array of config keys
@@ -402,7 +406,7 @@ abstract class KeyRotator
      * The default implementation checks for common keywords, but you should override
      * this method to provide service-specific detection logic for better accuracy.
      *
-     * @param Exception $exception The exception thrown by the API client.
+     * @param  Exception  $exception  The exception thrown by the API client.
      * @return bool True if the exception is due to exhausted quota, otherwise false.
      *
      * @example
@@ -439,14 +443,14 @@ abstract class KeyRotator
     {
         $depletionKeywords = [
             'exceeded', 'quota', 'limit', 'rate',
-            'subscription', 'billed', 'payment', 'card', 'insufficient'
+            'subscription', 'billed', 'payment', 'card', 'insufficient',
         ];
 
         $message = strtolower($exception->getMessage());
 
         $foundKeywords = array_filter(
             $depletionKeywords,
-            fn($keyword) => str_contains($message, $keyword)
+            fn ($keyword) => str_contains($message, $keyword)
         );
 
         return count($foundKeywords) >= 1;
@@ -459,8 +463,7 @@ abstract class KeyRotator
      * then from the base pool. Automatically marks the key as depleted if both
      * pools are exhausted. You can override this to add custom tracking logic.
      *
-     * @param float $quantity The amount of usage to register (e.g., tokens, API calls, credits).
-     * @return void
+     * @param  float  $quantity  The amount of usage to register (e.g., tokens, API calls, credits).
      *
      * @example
      * ```php
@@ -487,7 +490,7 @@ abstract class KeyRotator
      */
     public function registerUsage(float $quantity): void
     {
-        if (!$this->currentKey) {
+        if (! $this->currentKey) {
             return;
         }
 
@@ -520,7 +523,7 @@ abstract class KeyRotator
      * This is useful when the API returns an error before you can track usage normally.
      * You can override this to add custom depletion handling logic.
      *
-     * @param Exception $exception The exception to analyze and handle.
+     * @param  Exception  $exception  The exception to analyze and handle.
      * @return bool True if the key was marked as depleted, false otherwise.
      *
      * @example
@@ -558,22 +561,22 @@ abstract class KeyRotator
      */
     public function handleDepletedException(Exception $exception): bool
     {
-        if ($this->currentKey && !$this->currentKey->is_depleted && $this->isDepletedException($exception)) {
+        if ($this->currentKey && ! $this->currentKey->is_depleted && $this->isDepletedException($exception)) {
             $this->currentKey->update([
                 'is_depleted' => true,
                 'depleted_at' => now(),
             ]);
-            Log::info("KeyRotator: Key ID {$this->currentKey->id} for service '" . static::$serviceName . "' marked as depleted due to an exception.");
+            Log::info("KeyRotator: Key ID {$this->currentKey->id} for service '".static::$serviceName."' marked as depleted due to an exception.");
+
             return true;
         }
+
         return false;
     }
 
     /**
      * Check if a key has exhausted both of its usage pools
      * and, if so, mark it as depleted.
-     *
-     * @param RotableApiKey $key
      */
     protected function checkAndMarkAsDepleted(RotableApiKey $key): void
     {
