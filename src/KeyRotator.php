@@ -3,6 +3,7 @@
 namespace SimoneBianco\LaravelKeyRotator;
 
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
@@ -14,6 +15,7 @@ use SimoneBianco\LaravelKeyRotator\Enums\FreeLimitType;
 use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
 use SimoneBianco\LaravelKeyRotator\Exceptions\NoAvailableKeysException;
 use SimoneBianco\LaravelKeyRotator\Models\RotableApiKey;
+use SimoneBianco\LaravelKeyRotator\Models\RotableApiKeyModelQuota;
 
 /**
  * Abstract class for managing API key rotation.
@@ -314,6 +316,219 @@ abstract class KeyRotator
      * }
      * ```
      */
+    protected function availableKeysQuery(): Builder
+    {
+        return RotableApiKey::where('service', static::$serviceName)
+            ->where('is_active', true)
+            ->where('is_depleted', false);
+    }
+
+    public function canServe(
+        RotableApiKey $key,
+        ?string $model = null,
+        float $threshold = 0.0,
+        bool $freeOnly = false,
+    ): bool {
+        if (! $key->is_active || $key->is_depleted) {
+            return false;
+        }
+
+        if (array_key_exists('archived_at', $key->getAttributes()) && $key->archived_at !== null) {
+            return false;
+        }
+
+        if (method_exists($key, 'trashed') && $key->trashed()) {
+            return false;
+        }
+
+        $required = max(0.0, $threshold);
+
+        if ($model !== null) {
+            $quota = $key->quotaForModel($model);
+            if ($quota !== null) {
+                if ($quota->canServe($required)) {
+                    return true;
+                }
+
+                return ! $freeOnly && $this->basePoolCanServe($key, $required);
+            }
+
+            $hasModelQuotas = $key->relationLoaded('modelQuotas')
+                ? $key->modelQuotas->isNotEmpty()
+                : $key->modelQuotas()->exists();
+
+            if ($hasModelQuotas) {
+                return ! $freeOnly && $this->basePoolCanServe($key, $required);
+            }
+        }
+
+        if ($this->keyFreePoolCanServe($key, $required)) {
+            return true;
+        }
+
+        return ! $freeOnly && $this->basePoolCanServe($key, $required);
+    }
+
+    public function takeFirstFree(string $model, float $threshold = 0.0): ?RotableApiKey
+    {
+        $candidates = $this->availableKeysQuery()
+            ->with('modelQuotas')
+            ->get()
+            ->filter(fn (RotableApiKey $key): bool => $this->canServe($key, $model, $threshold, freeOnly: true))
+            ->sortByDesc(fn (RotableApiKey $key): float => $this->remainingFreeForModel($key, $model));
+
+        $selected = $candidates->first();
+        if (! $selected instanceof RotableApiKey) {
+            return null;
+        }
+
+        $this->currentKey = $selected;
+        self::cacheRotableKeyId($selected);
+
+        return $selected;
+    }
+
+    public function pickForModel(
+        string $model,
+        float $threshold = 0.0,
+        bool $allowBasePoolFallback = false,
+    ): ?RotableApiKey {
+        $freeKey = $this->takeFirstFree($model, $threshold);
+        if ($freeKey !== null) {
+            return $freeKey;
+        }
+
+        if (! $allowBasePoolFallback) {
+            return null;
+        }
+
+        $candidates = $this->availableKeysQuery()
+            ->with('modelQuotas')
+            ->get()
+            ->filter(fn (RotableApiKey $key): bool => $this->canServe($key, $model, $threshold, freeOnly: false))
+            ->sortByDesc(fn (RotableApiKey $key): float => $this->remainingBaseUsage($key));
+
+        $selected = $candidates->first();
+        if (! $selected instanceof RotableApiKey) {
+            return null;
+        }
+
+        $this->currentKey = $selected;
+        self::cacheRotableKeyId($selected);
+
+        return $selected;
+    }
+
+    public function registerUsageForModel(string $model, float $quantity): void
+    {
+        if (! $this->currentKey || $quantity <= 0) {
+            return;
+        }
+
+        $key = $this->currentKey;
+        $quota = $key->quotaForModel($model);
+
+        if (! $quota instanceof RotableApiKeyModelQuota) {
+            $hasModelQuotas = $key->relationLoaded('modelQuotas')
+                ? $key->modelQuotas->isNotEmpty()
+                : $key->modelQuotas()->exists();
+
+            if (! $hasModelQuotas) {
+                $this->registerUsage($quantity);
+
+                return;
+            }
+
+            if ($key->base_limit_type !== 'none') {
+                $key->current_base_usage = (float) $key->current_base_usage + $quantity;
+            }
+            $key->last_used_at = now();
+            $key->save();
+            $this->checkAndMarkAsDepletedForModelQuotas($key);
+
+            return;
+        }
+
+        $remainingFree = $quota->remainingFreeUsage();
+        if ($remainingFree > 0) {
+            $usageForFreePool = min($quantity, $remainingFree);
+            $quota->current_free_usage = (float) $quota->current_free_usage + $usageForFreePool;
+            $quota->save();
+            $quantity -= $usageForFreePool;
+        }
+
+        if ($quantity > 0 && $key->base_limit_type !== 'none') {
+            $key->current_base_usage = (float) $key->current_base_usage + $quantity;
+        }
+
+        $key->last_used_at = now();
+        $key->save();
+
+        $this->checkAndMarkAsDepletedForModelQuotas($key);
+    }
+
+    private function keyFreePoolCanServe(RotableApiKey $key, float $required): bool
+    {
+        if ($key->free_limit_type === 'none' || $key->max_free_usage === null) {
+            return false;
+        }
+
+        $remaining = max(0.0, (float) $key->max_free_usage - (float) $key->current_free_usage);
+
+        return $remaining >= $required;
+    }
+
+    private function basePoolCanServe(RotableApiKey $key, float $required): bool
+    {
+        return match ($key->base_limit_type) {
+            'unlimited' => true,
+            'fixed' => $key->max_base_usage !== null
+                && max(0.0, (float) $key->max_base_usage - (float) $key->current_base_usage) >= $required,
+            default => false,
+        };
+    }
+
+    private function remainingFreeForModel(RotableApiKey $key, string $model): float
+    {
+        $quota = $key->quotaForModel($model);
+        if ($quota instanceof RotableApiKeyModelQuota) {
+            return $quota->remainingFreeUsage();
+        }
+
+        if ($key->free_limit_type === 'none' || $key->max_free_usage === null) {
+            return 0.0;
+        }
+
+        return max(0.0, (float) $key->max_free_usage - (float) $key->current_free_usage);
+    }
+
+    private function remainingBaseUsage(RotableApiKey $key): float
+    {
+        return match ($key->base_limit_type) {
+            'unlimited' => PHP_FLOAT_MAX,
+            'fixed' => max(0.0, (float) ($key->max_base_usage ?? 0) - (float) $key->current_base_usage),
+            default => 0.0,
+        };
+    }
+
+    private function checkAndMarkAsDepletedForModelQuotas(RotableApiKey $key): void
+    {
+        $quotas = $key->modelQuotas()->get();
+        $anyModelFreeLeft = $quotas->contains(
+            static fn (RotableApiKeyModelQuota $quota): bool => $quota->remainingFreeUsage() > 0.0
+        );
+
+        $baseDepleted = match ($key->base_limit_type) {
+            'none' => true,
+            'unlimited' => false,
+            'fixed' => ($key->current_base_usage >= $key->max_base_usage),
+        };
+
+        if (! $anyModelFreeLeft && $baseDepleted) {
+            $key->update(['is_depleted' => true, 'depleted_at' => now()]);
+        }
+    }
+
     public function pickKey(): static
     {
         $nextKey = RotableApiKey::where('service', static::$serviceName)

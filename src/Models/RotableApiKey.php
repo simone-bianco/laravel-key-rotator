@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SimoneBianco\LaravelKeyRotator\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Crypt;
 use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
 use Throwable;
@@ -69,5 +70,19 @@ class RotableApiKey extends Model
         } catch (Throwable) {
             throw new KeyDecryptionException('Unable to decrypt the stored API key.');
         }
+    }
+
+    public function modelQuotas(): HasMany
+    {
+        return $this->hasMany(RotableApiKeyModelQuota::class, 'rotable_api_key_id');
+    }
+
+    public function quotaForModel(string $model): ?RotableApiKeyModelQuota
+    {
+        if ($this->relationLoaded('modelQuotas')) {
+            return $this->modelQuotas->firstWhere('model', $model);
+        }
+
+        return $this->modelQuotas()->where('model', $model)->first();
     }
 }

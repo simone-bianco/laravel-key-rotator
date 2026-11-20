@@ -22,6 +22,7 @@ class LaravelKeyRotatorServiceProvider extends PackageServiceProvider
             ->hasConfigFile('key-rotator')
             ->hasMigrations([
                 'create_rotable_api_keys_table',
+                'create_rotable_api_key_model_quotas_table',
             ])
             ->hasCommands([
                 MakeKeyRotatorCommand::class,
