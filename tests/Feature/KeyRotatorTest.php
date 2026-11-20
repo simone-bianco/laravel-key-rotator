@@ -1,23 +1,26 @@
 <?php
 
-use SimoneBianco\LaravelKeyRotator\Models\RotableApiKey;
-use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
-use SimoneBianco\LaravelKeyRotator\Exceptions\NoAvailableKeysException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use SimoneBianco\LaravelKeyRotator\Data\RotableKeyData;
 use SimoneBianco\LaravelKeyRotator\Exceptions\KeyDecryptionException;
+use SimoneBianco\LaravelKeyRotator\Exceptions\NoAvailableKeysException;
+use SimoneBianco\LaravelKeyRotator\KeyRotator;
+use SimoneBianco\LaravelKeyRotator\Models\RotableApiKey;
 
 // Test KeyRotator implementation
-class TestKeyRotator extends \SimoneBianco\LaravelKeyRotator\KeyRotator
+class TestKeyRotator extends KeyRotator
 {
     protected static string $serviceName = 'test-service';
+
     protected static string|array $configKey = 'services.test.api_key';
 }
 
 // Test KeyRotator with multiple config keys
-class TestMultiConfigKeyRotator extends \SimoneBianco\LaravelKeyRotator\KeyRotator
+class TestMultiConfigKeyRotator extends KeyRotator
 {
     protected static string $serviceName = 'test-multi';
+
     protected static string|array $configKey = [
         'services.test.api_key',
         'test.api_key',
@@ -26,12 +29,12 @@ class TestMultiConfigKeyRotator extends \SimoneBianco\LaravelKeyRotator\KeyRotat
 }
 
 beforeEach(function () {
-    // Clear any existing keys
-    RotableApiKey::query()->delete();
+    // Clear active and soft-deleted keys between tests.
+    RotableApiKey::withTrashed()->forceDelete();
 });
 
 test('can register a new API key', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $key = $rotator->registerKey(new RotableKeyData(
         key: 'test-key-123',
@@ -47,7 +50,7 @@ test('can register a new API key', function () {
 });
 
 test('can pick the best available key', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     // Register multiple keys with different usage
     $key1 = $rotator->registerKey(new RotableKeyData(
@@ -71,13 +74,13 @@ test('can pick the best available key', function () {
 });
 
 test('throws exception when no keys are available', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $rotator->pickKey();
 })->throws(NoAvailableKeysException::class);
 
 test('can inject key into config', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $rotator->registerKey(new RotableKeyData(
         key: 'test-key-123',
@@ -90,7 +93,7 @@ test('can inject key into config', function () {
 });
 
 test('can inject key into multiple config locations', function () {
-    $rotator = new TestMultiConfigKeyRotator();
+    $rotator = new TestMultiConfigKeyRotator;
 
     $rotator->registerKey(new RotableKeyData(
         key: 'multi-key-123',
@@ -105,7 +108,7 @@ test('can inject key into multiple config locations', function () {
 });
 
 test('can register usage for a key', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $key = $rotator->registerKey(new RotableKeyData(
         key: 'test-key',
@@ -123,7 +126,7 @@ test('can register usage for a key', function () {
 });
 
 test('consumes free pool before base pool', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $key = $rotator->registerKey(new RotableKeyData(
         key: 'test-key',
@@ -144,7 +147,7 @@ test('consumes free pool before base pool', function () {
 });
 
 test('marks key as depleted when both pools are exhausted', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $key = $rotator->registerKey(new RotableKeyData(
         key: 'test-key',
@@ -164,7 +167,7 @@ test('marks key as depleted when both pools are exhausted', function () {
 });
 
 test('can register usage for last used key', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $rotator->registerKey(new RotableKeyData(
         key: 'test-key',
@@ -182,7 +185,7 @@ test('can register usage for last used key', function () {
 });
 
 test('detects depletion exceptions', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $exception = new Exception('Rate limit exceeded for this API key');
 
@@ -190,7 +193,7 @@ test('detects depletion exceptions', function () {
 });
 
 test('handles depletion exception and marks key as depleted', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $key = $rotator->registerKey(new RotableKeyData(
         key: 'test-key',
@@ -210,7 +213,7 @@ test('handles depletion exception and marks key as depleted', function () {
 });
 
 test('does not pick depleted keys', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     // Register a depleted key
     $depletedKey = $rotator->registerKey(new RotableKeyData(
@@ -231,8 +234,40 @@ test('does not pick depleted keys', function () {
     expect($rotator->getCurrentKey()->id)->toBe($activeKey->id);
 });
 
+test('soft-deleted keys are excluded from rotation but remain available for in-flight usage accounting', function () {
+    $rotator = new TestKeyRotator;
+
+    $deletedKey = $rotator->registerKey(new RotableKeyData(
+        key: 'deleted-key',
+        base_limit_type: 'fixed',
+        max_base_usage: 1000
+    ));
+    $activeKey = $rotator->registerKey(new RotableKeyData(
+        key: 'active-key',
+        base_limit_type: 'fixed',
+        max_base_usage: 500
+    ));
+
+    // Cache the first key as if a provider request were already in flight, then delete it.
+    $rotator->pickKey()->injectKey();
+    expect($rotator->getCurrentKey()->id)->toBe($deletedKey->id);
+    $deletedKey->delete();
+
+    expect(RotableApiKey::query()->find($deletedKey->id))->toBeNull()
+        ->and(RotableApiKey::onlyTrashed()->find($deletedKey->id))->not->toBeNull();
+
+    // Usage from the already-started request still lands on the soft-deleted key.
+    TestKeyRotator::registerUsageForLastUsedKey(25);
+    expect((float) RotableApiKey::withTrashed()->findOrFail($deletedKey->id)->current_base_usage)->toBe(25.0);
+
+    // New rotation never selects the deleted key.
+    $next = new TestKeyRotator;
+    $next->pickKey();
+    expect($next->getCurrentKey()->id)->toBe($activeKey->id);
+});
+
 test('does not pick inactive keys', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     // Register an inactive key
     $inactiveKey = $rotator->registerKey(new RotableKeyData(
@@ -259,7 +294,7 @@ test('can use make factory method', function () {
 });
 
 test('throws exception when injecting without picking a key', function () {
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
 
     $rotator->injectKey();
 })->throws(Exception::class, 'No key selected');
@@ -282,7 +317,7 @@ test('decryption failure is fail closed without ciphertext leakage or config mut
         ->update(['key' => 'invalid-ciphertext']);
 
     $key->refresh();
-    $rotator = new TestKeyRotator();
+    $rotator = new TestKeyRotator;
     $rotator->setKey($key);
 
     expect(fn () => $rotator->injectKey())
@@ -291,4 +326,3 @@ test('decryption failure is fail closed without ciphertext leakage or config mut
     expect(Config::get('services.test.api_key'))
         ->toBe('unchanged');
 });
-

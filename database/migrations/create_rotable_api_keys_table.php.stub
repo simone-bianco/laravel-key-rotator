@@ -37,6 +37,7 @@ return new class extends Migration
             $table->timestamp('depleted_at')->nullable();
 
             $table->timestamps();
+            $table->softDeletes();
             $table->timestamp('last_used_at')->nullable();
         });
     }
