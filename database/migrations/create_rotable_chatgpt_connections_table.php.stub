@@ -1,0 +1,5 @@
+<?php
+
+use SimoneBianco\LaravelKeyRotator\Migrations\CreateChatGptConnections;
+
+return new CreateChatGptConnections;
